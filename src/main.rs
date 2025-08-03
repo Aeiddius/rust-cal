@@ -1,17 +1,21 @@
 use std::collections::HashMap;
 
 fn main() {
-    let ex: String = String::from("( ( 9 + 3 ) * 2 - 6 )");
+    let ex: String = String::from("( ( 12 * ( 3 + 5 ) ) - ( 8 / 2 ) + ( 7 - 4 ) ) / ( 6 - ( 1 + 2 ) ) + ( ( 5 + 5 ) * 2 )");
 
-
-
-    let postfix: String = convert_to_postfix(&ex);
-    let evaluated_rpn: f64 = evaluate_rpn(&postfix);
-    println!("{postfix}");
+    let postfix: Vec<&str> = convert_to_postfix(&ex);
+    let evaluated_rpn: f64 = evaluate_rpn(postfix);
     println!("Final result: {evaluated_rpn}");
 }
 
-fn convert_to_postfix(infix_expression: &String) -> String {
+
+fn get_priority(operators: &HashMap<&str, u8>, key: &str) -> u8 {
+    *operators
+        .get(key)
+        .expect(&format!("Key does not exist: {}", key))
+}
+
+fn convert_to_postfix(infix_expression: &str) -> Vec<&str> {
 
     let priorities: HashMap<&str, u8> = HashMap::from([
         ("+", 1),
@@ -27,47 +31,35 @@ fn convert_to_postfix(infix_expression: &String) -> String {
     let tokens: Vec<&str> = infix_expression.split_whitespace().collect();
     for token in tokens {
         
-        match token.trim().parse::<u32>() {
-            Ok(_n) => {
-                output.push(token);
-                println!("Pushing to output: {token} | {output:?}")
-            },
-            Err(_err) => {
-                
-                if token == "(" {
-                    stack.push(token);
-                    println!("Pushing to stack sub: {token} | {stack:?}")
-                } else if token == ")" {
-                    while !stack.is_empty() && stack.last().unwrap() != &"(" {
-                        output.push(stack.pop().unwrap());
-                        println!("Pushing to output sub: {token} | {output:?} |           | {stack:?}")
-                    }
-                    stack.pop(); // pop last parenthesis
-                    println!("Pushing to output sub popped: {token} | {stack:?}")
+        if token.parse::<f64>().is_ok() {
+            output.push(token);
+        } else if token == "(" {
+            stack.push(token);
+        } else if token == ")" {
+
+            while let Some(&top) = stack.last() {
+                if top == "(" {
+                    break;
+                }
+                output.push(stack.pop().unwrap());
+            }
+            stack.pop(); // pop last parenthesis
+        } else {
+            while let Some(&top) = stack.last() {
+                if top == "(" {
+                    break;
+                }
+                let top_prec: u8 = get_priority(&priorities, top);
+                let cur_prec: u8 = get_priority(&priorities, token);
+                if top_prec >= cur_prec {
+                    output.push(stack.pop().unwrap());
                 } else {
-                    if !stack.is_empty() && stack.last().unwrap() == &"(" {
-                        stack.push(token);
-                        println!("Pushing to stack: {token} | {stack:?}");
-                    } else {
-                        loop {
-                            let last = stack.last().unwrap();
-                            if stack.is_empty() || last == &"(" {
-                                break;
-                            }
-                            if get_priority(&priorities, last) >= get_priority(&priorities, &token) {
-                            output.push(stack.pop().unwrap());
-                            println!("Pushing to ouput the stack pop: {token} | {output:?}");
-                            }
-                        }
-                        stack.push(token);
-                        println!("Pushing to stack: {token} | {stack:?}");
-
-                    }
-
-      
+                    break;
                 }
             }
+            stack.push(token);
         }
+        
     };
 
     while !stack.is_empty() {
@@ -76,46 +68,32 @@ fn convert_to_postfix(infix_expression: &String) -> String {
 
 
     output
-        .iter()
-        .map(|n| n.to_string())
-        .collect::<Vec<String>>()
-        .join(" ")
 
 }
 
-fn get_priority<'a>(operators: &'a HashMap<&'a str, u8>, key: &'a str) -> &'a u8 {
-    operators.get(&key).expect(&format!("Key does not exist: {}", key))
-}
 
 // Reverse Polish Notation
-fn evaluate_rpn(expression: &String) -> f64 {
-    let list: Vec<&str> = expression.split_whitespace().collect();
-    
+fn evaluate_rpn(tokens: Vec<&str>) -> f64 {
+
     let mut stack: Vec<f64> = Vec::new();
 
-    for s in list {
-        match s.trim().parse::<f64>() {
-            Ok(n) => {
-                stack.push(n);
-                println!("Num: {}", n);
-            },
-            Err(_err) => {
-                let b: f64 = stack.pop().expect("there should be two");
-                let a: f64 = stack.pop().expect("there should be two");
-
-                println!("Ope: {}", s);
-                match s {
-                    "+" => {println!("Add {a} + {b}");stack.push(a + b);},
-                    "-" => {println!("Sub {a} - {b}");stack.push(a - b);},
-                    "*" => {println!("Mul {a} * {b}");stack.push(a * b);},
-                    "/" => {println!("Div {a} / {b}");stack.push(a / b);},
-                    "^" => {println!("Pow {a} ^ {b}");stack.push(a.powf(b));},
-                    _ => {}
-                }
-            }
+    for token in tokens {
+        if let Ok(n) = token.parse::<f64>() {
+            stack.push(n);
+        } else {
+            let b: f64 = stack.pop().expect("Missing operand");
+            let a: f64 = stack.pop().expect("Missing operand");
+            let res: f64 = match token {
+                "+" => a + b,
+                "-" => a - b,
+                "*" => a * b,
+                "/" => a / b,
+                "^" => a.powf(b),
+                _ => panic!("Unknown operator {}", token),
+            };
+            stack.push(res);
         }
     }
-
     stack.pop().unwrap()
 }
 
